@@ -2,6 +2,7 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import Dashboard from './pages/Dashboard'
 import Login from './pages/Login'
 import Register from './pages/Register'
+import BrokerApplication from './pages/BrokerApplication'
 import TopBar from './components/TopBar'
 import { getToken } from './api/session'
 
@@ -21,6 +22,7 @@ function App() {
       <main>
         <Routes>
           <Route path="/" element={<RequireAuth><Dashboard /></RequireAuth>} />
+          <Route path="/broker-application" element={<RequireAuth><BrokerApplication /></RequireAuth>} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
         </Routes>
