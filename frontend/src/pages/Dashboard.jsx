@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import api from '../api/client'
 
 export default function Dashboard() {
@@ -20,7 +21,10 @@ export default function Dashboard() {
 
   return (
     <div className="page">
-      <h1>Dashboard</h1>
+      <div className="page-header">
+        <h1>Dashboard</h1>
+        <Link className="button" to="/broker-application">Become a broker</Link>
+      </div>
       <div className="card">
         <p>{message}</p>
         {profile && (
@@ -28,6 +32,7 @@ export default function Dashboard() {
             <li><strong>Email:</strong> {profile.email}</li>
             {profile.first_name && <li><strong>First name:</strong> {profile.first_name}</li>}
             {profile.last_name && <li><strong>Last name:</strong> {profile.last_name}</li>}
+            <li><strong>Role:</strong> {profile.is_broker ? 'Broker' : 'Standard user'}</li>
           </ul>
         )}
       </div>
