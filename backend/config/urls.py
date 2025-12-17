@@ -6,6 +6,8 @@ from rest_framework_simplejwt.views import TokenRefreshView
 
 from accounts.views import HealthView, LoginView, RegisterView, ProfileView, BrokerApplicationView
 
+import transactions.urls
+
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/health/", HealthView.as_view(), name="health"),
@@ -14,6 +16,7 @@ urlpatterns = [
     path("api/auth/profile/", ProfileView.as_view(), name="profile"),
     path("api/broker/application/", BrokerApplicationView.as_view(), name="broker-application"),
     path("api/auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path("api/", include(transactions.urls)),
 ]
 
 if settings.DEBUG:

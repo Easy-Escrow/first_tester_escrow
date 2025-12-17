@@ -162,3 +162,65 @@ button {
 
 .error { color: var(--error); margin-bottom: 10px; }
 .success { color: var(--success); margin-bottom: 10px; }
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.tab {
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: #13233a;
+  border: 1px solid #21385f;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.tab.active {
+  background: var(--accent);
+  border-color: #1c56b2;
+}
+
+.stack {
+  display: grid;
+  gap: 12px;
+}
+
+.transaction-card {
+  border: 1px solid #243b63;
+  border-radius: 8px;
+  padding: 16px;
+  background: #0f1f33;
+}
+
+.transaction-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.muted {
+  color: #9fb3d3;
+}
+
+.inline-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.inline-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.inline-form input {
+  max-width: 320px;
+}
