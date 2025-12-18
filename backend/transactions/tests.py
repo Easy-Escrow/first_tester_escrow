@@ -106,3 +106,22 @@ class TransactionServiceTests(TestCase):
         self.client.force_authenticate(self.other_user)
         response = self.client.post(reverse("accept-invitation", kwargs={"token": secondary_invite.token}))
         self.assertEqual(response.status_code, 403)
+
+    def test_invited_user_can_view_transaction_list(self):
+        self.client.post(
+            reverse("transaction-list"),
+            {
+                "type": TransactionType.SINGLE_BROKER_SALE,
+                "payload": {"buyer_email": "buyer@example.com", "seller_email": "seller@example.com"},
+            },
+            format="json",
+        )
+
+        invited_user = User.objects.create_user(email="buyer@example.com", password="pass", is_broker=False)
+        invited_client = APIClient()
+        invited_client.force_authenticate(invited_user)
+
+        response = invited_client.get(reverse("transaction-list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertIsNone(response.data[0].get("my_role"))

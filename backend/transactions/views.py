@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from rest_framework import generics, permissions, status, views
 from rest_framework.response import Response
@@ -25,8 +26,11 @@ class TransactionQuerysetMixin:
     def get_queryset(self):
         user: User = self.request.user
         return (
-            Transaction.objects.filter(participants__user=user)
-            | Transaction.objects.filter(created_by=user)
+            Transaction.objects.filter(
+                Q(participants__user=user)
+                | Q(participants__invited_email=user.email)
+                | Q(created_by=user)
+            )
         ).distinct().prefetch_related("participants", "invitations", "details", "commission_split")
 
 
