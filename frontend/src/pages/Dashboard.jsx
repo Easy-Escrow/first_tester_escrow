@@ -14,6 +14,16 @@ const transactionTypes = [
   { value: 'hidden_defects', label: 'Hidden defects' },
 ]
 
+const propertyTypeOptions = [
+  { value: 'house', label: 'House' },
+  { value: 'apartment', label: 'Apartment' },
+  { value: 'condo', label: 'Condominium' },
+  { value: 'land', label: 'Land' },
+  { value: 'commercial', label: 'Commercial' },
+  { value: 'industrial', label: 'Industrial' },
+  { value: 'other', label: 'Other' },
+]
+
 const emptyForm = {
   name: '',
   currency: 'usd',
@@ -85,7 +95,19 @@ export default function Dashboard() {
 
   const handleFormChange = (event) => {
     const { name, value } = event.target
-    setFormData((prev) => ({ ...prev, [name]: value }))
+    setFormData((prev) => {
+      const next = { ...prev, [name]: value }
+
+      if (name === 'transaction_type') {
+        next.buyer_email = ''
+        next.seller_email = ''
+        next.initiating_party_email = ''
+        next.initiating_party_role = 'buyer'
+        next.secondary_broker_email = ''
+      }
+
+      return next
+    })
   }
 
   const handleCreateTransaction = async (event) => {
@@ -94,10 +116,44 @@ export default function Dashboard() {
     setFormSuccess('')
 
     try {
+      if (
+        formData.transaction_type === 'single_broker_sale' &&
+        (!formData.buyer_email || !formData.seller_email)
+      ) {
+        setFormError('Buyer and seller emails are required for a single broker sale.')
+        return
+      }
+
+      if (
+        formData.transaction_type === 'double_broker_commission_split' &&
+        (!formData.initiating_party_email ||
+          !formData.initiating_party_role ||
+          !formData.secondary_broker_email)
+      ) {
+        setFormError('Provide the known party email, their role, and the secondary broker email for a double broker transaction.')
+        return
+      }
+
       const payload = {
-        ...formData,
+        name: formData.name,
+        currency: formData.currency,
+        transaction_type: formData.transaction_type,
+        property_type: formData.property_type,
         purchase_price: formData.purchase_price || '0',
         earnest_deposit: formData.earnest_deposit || '0',
+        due_diligence_end_date: formData.due_diligence_end_date,
+        estimated_closing_date: formData.estimated_closing_date,
+      }
+
+      if (formData.transaction_type === 'single_broker_sale') {
+        payload.buyer_email = formData.buyer_email
+        payload.seller_email = formData.seller_email
+      }
+
+      if (formData.transaction_type === 'double_broker_commission_split') {
+        payload.initiating_party_email = formData.initiating_party_email
+        payload.initiating_party_role = formData.initiating_party_role
+        payload.secondary_broker_email = formData.secondary_broker_email
       }
 
       if (formData.participant_emails) {
@@ -182,7 +238,16 @@ export default function Dashboard() {
             </label>
             <label>
               Property type
-              <input name="property_type" value={formData.property_type} onChange={handleFormChange} required />
+              <select name="property_type" value={formData.property_type} onChange={handleFormChange} required>
+                <option value="" disabled>
+                  Select a property type
+                </option>
+                {propertyTypeOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </label>
             <label>
               Currency
