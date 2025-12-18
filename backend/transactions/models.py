@@ -43,7 +43,18 @@ class Transaction(models.Model):
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="transactions_created")
     type = models.CharField(max_length=50, choices=TransactionType.choices)
     status = models.CharField(max_length=20, choices=TransactionStatus.choices, default=TransactionStatus.DRAFT)
-    title = models.CharField(max_length=255, blank=True)
+    title = models.CharField(max_length=200)
+    property_description = models.TextField()
+    purchase_price = models.DecimalField(max_digits=14, decimal_places=2)
+    earnest_deposit = models.DecimalField(max_digits=14, decimal_places=2)
+    due_diligence_end_date = models.DateField()
+    estimated_closing_date = models.DateField()
+    depositor_name = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text="Only required if depositor is not the purchaser",
+    )
     property_address = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

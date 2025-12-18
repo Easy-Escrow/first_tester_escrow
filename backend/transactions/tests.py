@@ -15,10 +15,24 @@ class TransactionServiceTests(TestCase):
         self.other_user = User.objects.create_user(email="user@example.com", password="pass", is_broker=False)
         self.client.force_authenticate(self.broker)
 
+    def _core_fields(self, overrides: dict | None = None):
+        base = {
+            "title": "Test Transaction",
+            "property_description": "A great property",
+            "purchase_price": "100000.00",
+            "earnest_deposit": "10000.00",
+            "due_diligence_end_date": "2024-01-01",
+            "estimated_closing_date": "2024-02-01",
+        }
+        if overrides:
+            base.update(overrides)
+        return base
+
     def test_broker_can_create_single_broker_sale(self):
         response = self.client.post(
             reverse("transaction-list"),
             {
+                **self._core_fields(),
                 "type": TransactionType.SINGLE_BROKER_SALE,
                 "payload": {"buyer_email": "buyer@example.com", "seller_email": "seller@example.com"},
             },
@@ -34,6 +48,7 @@ class TransactionServiceTests(TestCase):
         response = self.client.post(
             reverse("transaction-list"),
             {
+                **self._core_fields(),
                 "type": TransactionType.SINGLE_BROKER_SALE,
                 "payload": {"buyer_email": "buyer@example.com", "seller_email": "seller@example.com"},
             },
@@ -45,6 +60,7 @@ class TransactionServiceTests(TestCase):
         response = self.client.post(
             reverse("transaction-list"),
             {
+                **self._core_fields(),
                 "type": TransactionType.DOUBLE_BROKER_SPLIT,
                 "payload": {
                     "known_party_role": ParticipantRole.BUYER,
@@ -67,6 +83,7 @@ class TransactionServiceTests(TestCase):
         self.client.post(
             reverse("transaction-list"),
             {
+                **self._core_fields(),
                 "type": TransactionType.DOUBLE_BROKER_SPLIT,
                 "payload": {
                     "known_party_role": ParticipantRole.BUYER,
@@ -93,6 +110,7 @@ class TransactionServiceTests(TestCase):
         self.client.post(
             reverse("transaction-list"),
             {
+                **self._core_fields(),
                 "type": TransactionType.DOUBLE_BROKER_SPLIT,
                 "payload": {
                     "known_party_role": ParticipantRole.BUYER,
@@ -111,6 +129,7 @@ class TransactionServiceTests(TestCase):
         self.client.post(
             reverse("transaction-list"),
             {
+                **self._core_fields(),
                 "type": TransactionType.SINGLE_BROKER_SALE,
                 "payload": {"buyer_email": "buyer@example.com", "seller_email": "seller@example.com"},
             },
@@ -125,3 +144,55 @@ class TransactionServiceTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data), 1)
         self.assertIsNone(response.data[0].get("my_role"))
+
+    def test_required_core_fields_missing(self):
+        response = self.client.post(
+            reverse("transaction-list"),
+            {
+                "type": TransactionType.SINGLE_BROKER_SALE,
+                "payload": {"buyer_email": "buyer@example.com", "seller_email": "seller@example.com"},
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("title", response.data)
+
+    def test_validation_for_earnest_exceeds_purchase_price(self):
+        response = self.client.post(
+            reverse("transaction-list"),
+            {
+                **self._core_fields({"earnest_deposit": "200000.00"}),
+                "type": TransactionType.SINGLE_BROKER_SALE,
+                "payload": {"buyer_email": "buyer@example.com", "seller_email": "seller@example.com"},
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("earnest_deposit", response.data)
+
+    def test_validation_for_invalid_dates(self):
+        response = self.client.post(
+            reverse("transaction-list"),
+            {
+                **self._core_fields({"estimated_closing_date": "2023-12-31"}),
+                "type": TransactionType.SINGLE_BROKER_SALE,
+                "payload": {"buyer_email": "buyer@example.com", "seller_email": "seller@example.com"},
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("estimated_closing_date", response.data)
+
+    def test_optional_depositor_name_persists(self):
+        response = self.client.post(
+            reverse("transaction-list"),
+            {
+                **self._core_fields({"depositor_name": "Escrow Corp"}),
+                "type": TransactionType.SINGLE_BROKER_SALE,
+                "payload": {"buyer_email": "buyer@example.com", "seller_email": "seller@example.com"},
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        transaction = Transaction.objects.get()
+        self.assertEqual(transaction.depositor_name, "Escrow Corp")

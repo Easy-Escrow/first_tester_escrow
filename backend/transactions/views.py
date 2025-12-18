@@ -50,7 +50,12 @@ class TransactionListCreateView(TransactionQuerysetMixin, generics.ListCreateAPI
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        tx = create_transaction(created_by=request.user, type=serializer.validated_data["type"], payload=serializer.validated_data.get("payload", {}))
+        tx = create_transaction(
+            created_by=request.user,
+            type=serializer.validated_data["type"],
+            payload=serializer.validated_data.get("payload", {}),
+            core_fields=serializer.core_fields(),
+        )
         output = TransactionDetailSerializer(tx, context={"request": request}).data
         return Response(output, status=status.HTTP_201_CREATED)
 

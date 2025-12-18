@@ -191,10 +191,32 @@ button {
   margin-bottom: 16px;
 }
 
+.form-steps {
+  display: flex;
+  gap: 8px;
+}
+
+.form-steps .step {
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #2f4a77;
+  background: #0f1f33;
+  color: #9fb3d3;
+}
+
+.form-steps .step.active {
+  border-color: var(--accent);
+  color: #fff;
+}
+
 .transaction-form-grid {
   display: grid;
   gap: 12px;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.transaction-form-grid .span-2 {
+  grid-column: span 2;
 }
 
 .transaction-section {
@@ -212,4 +234,13 @@ button {
   border-radius: 8px;
   margin-bottom: 10px;
   background: #0f1f33;
+}
+
+.transaction-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 6px 12px;
+  margin: 6px 0;
+  color: #d7e3f4;
+  font-size: 0.95rem;
 }

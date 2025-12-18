@@ -35,6 +35,12 @@ class TransactionListSerializer(serializers.ModelSerializer):
             "type",
             "status",
             "title",
+            "property_description",
+            "purchase_price",
+            "earnest_deposit",
+            "due_diligence_end_date",
+            "estimated_closing_date",
+            "depositor_name",
             "property_address",
             "updated_at",
             "my_role",
@@ -76,6 +82,12 @@ class TransactionDetailSerializer(serializers.ModelSerializer):
             "type",
             "status",
             "title",
+            "property_description",
+            "purchase_price",
+            "earnest_deposit",
+            "due_diligence_end_date",
+            "estimated_closing_date",
+            "depositor_name",
             "property_address",
             "created_at",
             "updated_at",
@@ -115,11 +127,29 @@ class TransactionDetailSerializer(serializers.ModelSerializer):
 
 class TransactionCreateSerializer(serializers.Serializer):
     type = serializers.ChoiceField(choices=TransactionType.choices)
+    title = serializers.CharField(max_length=200)
+    property_description = serializers.CharField()
+    purchase_price = serializers.DecimalField(max_digits=14, decimal_places=2)
+    earnest_deposit = serializers.DecimalField(max_digits=14, decimal_places=2)
+    due_diligence_end_date = serializers.DateField()
+    estimated_closing_date = serializers.DateField()
+    depositor_name = serializers.CharField(max_length=200, required=False, allow_null=True, allow_blank=True)
+    property_address = serializers.CharField(max_length=255, required=False, allow_blank=True)
     payload = serializers.DictField()
 
     def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
         tx_type = attrs.get("type")
         payload: Dict[str, Any] = attrs.get("payload") or {}
+        if attrs["earnest_deposit"] > attrs["purchase_price"]:
+            raise serializers.ValidationError(
+                {"earnest_deposit": "Earnest deposit cannot exceed purchase price."}
+            )
+
+        if attrs["estimated_closing_date"] <= attrs["due_diligence_end_date"]:
+            raise serializers.ValidationError(
+                {"estimated_closing_date": "Estimated closing must be after due diligence end date."}
+            )
+
         if tx_type == TransactionType.SINGLE_BROKER_SALE:
             for field in ("buyer_email", "seller_email"):
                 if not payload.get(field):
@@ -129,6 +159,19 @@ class TransactionCreateSerializer(serializers.Serializer):
                 if not payload.get(field):
                     raise serializers.ValidationError({"payload": f"{field} is required"})
         return attrs
+
+    def core_fields(self) -> Dict[str, Any]:
+        allowed_fields = [
+            "title",
+            "property_description",
+            "purchase_price",
+            "earnest_deposit",
+            "due_diligence_end_date",
+            "estimated_closing_date",
+            "depositor_name",
+            "property_address",
+        ]
+        return {field: self.validated_data[field] for field in allowed_fields if field in self.validated_data}
 
 
 class AcceptInvitationSerializer(serializers.Serializer):

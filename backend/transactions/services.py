@@ -47,13 +47,20 @@ def _create_invitation(participant: "TransactionParticipant") -> TransactionInvi
 
 
 @transaction.atomic
-def create_transaction(*, created_by: User, type: str, payload: Dict[str, Any]) -> Transaction:
+def create_transaction(
+    *, created_by: User, type: str, payload: Dict[str, Any], core_fields: Dict[str, Any]
+) -> Transaction:
     _require_broker(created_by)
 
     if type not in TransactionType.values:
         raise ValidationError("Invalid transaction type")
 
-    transaction_obj = Transaction.objects.create(created_by=created_by, type=type, status=TransactionStatus.DRAFT)
+    transaction_obj = Transaction.objects.create(
+        created_by=created_by,
+        type=type,
+        status=TransactionStatus.DRAFT,
+        **core_fields,
+    )
 
     details = payload.copy()
     participants = []
