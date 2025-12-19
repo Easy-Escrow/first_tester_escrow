@@ -14,6 +14,7 @@ urlpatterns = [
     path("api/auth/profile/", ProfileView.as_view(), name="profile"),
     path("api/broker/application/", BrokerApplicationView.as_view(), name="broker-application"),
     path("api/auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path("api/", include("transactions.urls")),
 ]
 
 if settings.DEBUG:

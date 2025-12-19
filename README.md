@@ -39,6 +39,11 @@ A ready-to-extend starter that wires a Django REST API (JWT, DRF, CORS, custom e
 - `POST /api/auth/login/` — obtain JWT access/refresh tokens using email.
 - `GET /api/auth/profile/` — authenticated profile retrieval.
 - `GET /api/health/` — health check used by the frontend indicator.
+- `GET /api/transactions/` — list transactions visible to the authenticated user.
+- `POST /api/transactions/` — create transactions (brokers only).
+- `GET /api/transactions/<id>/` — retrieve transaction details.
+- `POST /api/transactions/<id>/invite-counterparty/` — secondary broker invites missing buyer/seller.
+- `POST /api/invitations/<token>/accept/` — accept a pending transaction invitation.
 
 ### Logging
 - Requests are logged via `config.middleware.RequestLogMiddleware` to the `api` logger.
