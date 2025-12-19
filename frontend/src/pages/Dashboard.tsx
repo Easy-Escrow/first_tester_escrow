@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../api/client'
-import { createTransaction, listTransactions } from '../api/transactions'
+import { createTransaction, getTransaction, listTransactions } from '../api/transactions'
 import type {
   TransactionCoreFields,
   TransactionCreateRequest,
+  TransactionDetail,
   TransactionListItem,
+  TransactionStage,
+  TransactionEvent,
   TransactionType,
 } from '../types/transactions'
 
@@ -59,6 +62,31 @@ function formatDate(value?: string) {
   return parsed.toLocaleDateString()
 }
 
+function formatStage(stage: TransactionStage) {
+  return stage.replaceAll('_', ' ')
+}
+
+function describeEvent(event: TransactionEvent) {
+  const data = event.data as Record<string, unknown>
+  const getValue = (key: string) => {
+    const value = data[key]
+    return typeof value === 'string' ? value : ''
+  }
+
+  switch (event.type) {
+    case 'stage_changed':
+      return `Stage changed from ${getValue('from') || '-'} to ${getValue('to') || '-'}`
+    case 'invitation_sent':
+      return `Invitation sent to ${getValue('invited_email') || 'participant'} (${getValue('participant_role')})`
+    case 'invitation_accepted':
+      return `Invitation accepted by ${getValue('email') || 'participant'} (${getValue('participant_role')})`
+    case 'counterparty_invited':
+      return `Counterparty invited: ${getValue('invited_email')}`
+    default:
+      return event.type.replaceAll('_', ' ')
+  }
+}
+
 export default function Dashboard() {
   const [message, setMessage] = useState('Fetching profile...')
   const [profile, setProfile] = useState<Profile | null>(null)
@@ -68,6 +96,9 @@ export default function Dashboard() {
   const [showCreate, setShowCreate] = useState(false)
   const [createType, setCreateType] = useState<TransactionType>('single_broker_sale')
   const [coreFields, setCoreFields] = useState<TransactionCoreFields>(initialCoreFields)
+  const [selectedTransaction, setSelectedTransaction] = useState<TransactionDetail | null>(null)
+  const [timelineLoading, setTimelineLoading] = useState(false)
+  const [timelineError, setTimelineError] = useState('')
   const [payloadState, setPayloadState] = useState<TypePayloadState>(initialPayloadState)
   const [coreError, setCoreError] = useState('')
   const [createError, setCreateError] = useState('')
@@ -101,6 +132,20 @@ export default function Dashboard() {
       setTransactionsError('Unable to load transactions right now.')
     } finally {
       setTransactionsLoading(false)
+    }
+  }
+
+  const loadTransactionDetails = async (id: string) => {
+    setTimelineLoading(true)
+    setTimelineError('')
+    try {
+      const response = await getTransaction(id)
+      setSelectedTransaction(response.data)
+    } catch (error) {
+      console.error(error)
+      setTimelineError('Unable to load transaction timeline right now.')
+    } finally {
+      setTimelineLoading(false)
     }
   }
 
@@ -445,13 +490,18 @@ export default function Dashboard() {
                   <span>Estimated closing: {formatDate(tx.estimated_closing_date)}</span>
                 </div>
                 <div className="badge-group">
-                  <span className="badge badge-info">Inviting</span>
+                  <span className="badge badge-info">Stage: {formatStage(tx.stage)}</span>
                   {tx.pending_invites_count !== undefined && tx.pending_invites_count > 0 && (
                     <span className="badge badge-muted">{tx.pending_invites_count} pending</span>
                   )}
                 </div>
               </div>
-              {tx.required_next_action && <div className="badge badge-muted">{tx.required_next_action}</div>}
+              <div className="transaction-actions">
+                {tx.required_next_action && <div className="badge badge-muted">{tx.required_next_action}</div>}
+                <button className="button button-secondary" onClick={() => loadTransactionDetails(tx.id)}>
+                  View details
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -471,13 +521,50 @@ export default function Dashboard() {
                   <span>Estimated closing: {formatDate(tx.estimated_closing_date)}</span>
                 </div>
                 <div className="badge-group">
-                  <span className="badge badge-info">{tx.status}</span>
+                  <span className="badge badge-info">Stage: {formatStage(tx.stage)}</span>
+                  <span className="badge badge-muted">{tx.status}</span>
                   {tx.my_role && <span className="badge badge-muted">My role: {tx.my_role}</span>}
                 </div>
               </div>
-              {tx.required_next_action && <div className="badge badge-muted">{tx.required_next_action}</div>}
+              <div className="transaction-actions">
+                {tx.required_next_action && <div className="badge badge-muted">{tx.required_next_action}</div>}
+                <button className="button button-secondary" onClick={() => loadTransactionDetails(tx.id)}>
+                  View details
+                </button>
+              </div>
             </div>
           ))}
+        </div>
+
+        <div className="transaction-section">
+          <h3>Transaction timeline</h3>
+          {timelineError && <p className="error">{timelineError}</p>}
+          {timelineLoading && <p>Loading timeline...</p>}
+          {!timelineLoading && !selectedTransaction && <p>Select a transaction to view its timeline.</p>}
+          {selectedTransaction && (
+            <div className="timeline">
+              <div className="timeline-header">
+                <strong>{selectedTransaction.title || 'Untitled transaction'}</strong>
+                <div className="badge-group">
+                  <span className="badge badge-info">Stage: {formatStage(selectedTransaction.stage)}</span>
+                  <span className="badge badge-muted">
+                    Updated: {formatDate(selectedTransaction.stage_updated_at)}
+                  </span>
+                </div>
+              </div>
+              {selectedTransaction.events.length === 0 && <p>No events recorded yet.</p>}
+              {selectedTransaction.events.map((event) => (
+                <div key={`${event.type}-${event.created_at}-${event.actor ?? ''}`} className="timeline-row">
+                  <div>
+                    <div className="eyebrow">{formatDate(event.created_at)}</div>
+                    <div>{describeEvent(event)}</div>
+                    {event.actor_email && <div className="text-muted">Actor: {event.actor_email}</div>}
+                  </div>
+                  <span className="badge badge-muted">{event.type.replaceAll('_', ' ')}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

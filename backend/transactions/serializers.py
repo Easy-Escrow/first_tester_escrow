@@ -11,6 +11,7 @@ from .models import (
     ParticipantRole,
     Transaction,
     TransactionDetails,
+    TransactionEvent,
     TransactionInvitation,
     TransactionStatus,
     TransactionType,
@@ -42,6 +43,8 @@ class TransactionListSerializer(serializers.ModelSerializer):
             "estimated_closing_date",
             "depositor_name",
             "property_address",
+            "stage",
+            "stage_updated_at",
             "updated_at",
             "my_role",
             "pending_invites_count",
@@ -69,11 +72,23 @@ class TransactionListSerializer(serializers.ModelSerializer):
         return None
 
 
+class TransactionEventSerializer(serializers.ModelSerializer):
+    actor_email = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TransactionEvent
+        fields = ("type", "actor", "actor_email", "data", "created_at")
+
+    def get_actor_email(self, obj: TransactionEvent) -> str | None:
+        return getattr(obj.actor, "email", None)
+
+
 class TransactionDetailSerializer(serializers.ModelSerializer):
     participants = serializers.SerializerMethodField()
     invitations = serializers.SerializerMethodField()
     details = serializers.SerializerMethodField()
     commission_split = CommissionSplitSerializer(read_only=True)
+    events = TransactionEventSerializer(many=True, read_only=True)
 
     class Meta:
         model = Transaction
@@ -81,6 +96,8 @@ class TransactionDetailSerializer(serializers.ModelSerializer):
             "id",
             "type",
             "status",
+            "stage",
+            "stage_updated_at",
             "title",
             "property_description",
             "purchase_price",
@@ -95,6 +112,7 @@ class TransactionDetailSerializer(serializers.ModelSerializer):
             "invitations",
             "details",
             "commission_split",
+            "events",
         )
 
     def get_participants(self, obj: Transaction) -> list[dict[str, Any]]:

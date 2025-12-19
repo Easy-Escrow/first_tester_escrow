@@ -17,9 +17,11 @@ from .models import (
     Transaction,
     TransactionDetails,
     TransactionInvitation,
+    TransactionEventType,
     TransactionStatus,
     TransactionType,
 )
+from .stages import log_transaction_event, recalc_and_transition_stage
 
 User = get_user_model()
 
@@ -38,12 +40,19 @@ def _require_broker(user: User) -> None:
         raise PermissionDenied("Only brokers can perform this action.")
 
 
-def _create_invitation(participant: "TransactionParticipant") -> TransactionInvitation:
-    return TransactionInvitation.objects.create(
+def _create_invitation(participant: "TransactionParticipant", actor: User | None = None) -> TransactionInvitation:
+    invitation = TransactionInvitation.objects.create(
         transaction=participant.transaction,
         participant=participant,
         expires_at=timezone.now() + timedelta(days=INVITE_EXPIRY_DAYS),
     )
+    log_transaction_event(
+        transaction=participant.transaction,
+        event_type=TransactionEventType.INVITATION_SENT,
+        actor=actor,
+        data={"participant_role": participant.role, "invited_email": participant.invited_email},
+    )
+    return invitation
 
 
 @transaction.atomic
@@ -71,6 +80,7 @@ def create_transaction(
             "role": ParticipantRole.BROKER_PRIMARY,
             "user": created_by,
             "invited_email": created_by.email,
+            "joined_at": timezone.now(),
         }
     )
 
@@ -134,16 +144,18 @@ def create_transaction(
                 invited_email=participant["invited_email"],
                 invited_by=created_by,
                 user=participant.get("user"),
+                joined_at=participant.get("joined_at"),
             )
         )
 
     # Create invitations for non-creator participants
     for part in participant_objs:
         if part.user_id != created_by.id:
-            _create_invitation(part)
+            _create_invitation(part, actor=created_by)
 
     transaction_obj.status = TransactionStatus.INVITING if len(participant_objs) > 1 else TransactionStatus.DRAFT
-    transaction_obj.save(update_fields=["status"])
+    transaction_obj.save(update_fields=["status", "updated_at"])
+    recalc_and_transition_stage(transaction_obj, actor=created_by)
 
     return transaction_obj
 
@@ -174,7 +186,14 @@ def invite_counterparty(*, transaction_obj: Transaction, acting_user: User, coun
         invited_email=counterparty_email,
         invited_by=acting_user,
     )
-    invitation = _create_invitation(participant)
+    log_transaction_event(
+        transaction=transaction_obj,
+        event_type=TransactionEventType.COUNTERPARTY_INVITED,
+        actor=acting_user,
+        data={"invited_email": counterparty_email, "role": participant.role},
+    )
+    invitation = _create_invitation(participant, actor=acting_user)
+    recalc_and_transition_stage(transaction_obj, actor=acting_user)
     return participant, invitation
 
 
@@ -206,6 +225,12 @@ def accept_invitation(*, token: str, user: User) -> Transaction:
     invitation.save(update_fields=["status"])
 
     transaction_obj = invitation.transaction
+    log_transaction_event(
+        transaction=transaction_obj,
+        event_type=TransactionEventType.INVITATION_ACCEPTED,
+        actor=user,
+        data={"participant_role": participant.role, "email": participant.invited_email},
+    )
 
     required_roles = {ParticipantRole.BROKER_PRIMARY, ParticipantRole.BUYER, ParticipantRole.SELLER}
     if transaction_obj.type == TransactionType.DOUBLE_BROKER_SPLIT:
@@ -216,6 +241,8 @@ def accept_invitation(*, token: str, user: User) -> Transaction:
     )
     if transaction_obj.status == TransactionStatus.INVITING and required_roles.issubset(accepted_roles):
         transaction_obj.status = TransactionStatus.ACTIVE
-        transaction_obj.save(update_fields=["status"])
+        transaction_obj.save(update_fields=["status", "updated_at"])
+
+    recalc_and_transition_stage(transaction_obj, actor=user)
 
     return transaction_obj

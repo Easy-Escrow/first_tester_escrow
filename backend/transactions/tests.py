@@ -3,7 +3,15 @@ from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
 
-from .models import CommissionSplit, ParticipantRole, Transaction, TransactionInvitation, TransactionType
+from .models import (
+    CommissionSplit,
+    ParticipantRole,
+    Transaction,
+    TransactionEventType,
+    TransactionInvitation,
+    TransactionStage,
+    TransactionType,
+)
 
 User = get_user_model()
 
@@ -196,3 +204,102 @@ class TransactionServiceTests(TestCase):
         self.assertEqual(response.status_code, 201)
         transaction = Transaction.objects.get()
         self.assertEqual(transaction.depositor_name, "Escrow Corp")
+
+    def test_single_broker_stage_progression_and_events(self):
+        self.client.post(
+            reverse("transaction-list"),
+            {
+                **self._core_fields(),
+                "type": TransactionType.SINGLE_BROKER_SALE,
+                "payload": {"buyer_email": "buyer@example.com", "seller_email": "seller@example.com"},
+            },
+            format="json",
+        )
+        transaction = Transaction.objects.get()
+        self.assertEqual(transaction.stage, TransactionStage.PENDING_INVITATIONS)
+
+        buyer_invite = TransactionInvitation.objects.get(participant__role=ParticipantRole.BUYER)
+        seller_invite = TransactionInvitation.objects.get(participant__role=ParticipantRole.SELLER)
+
+        buyer_user = User.objects.create_user(email="buyer@example.com", password="pass")
+        seller_user = User.objects.create_user(email="seller@example.com", password="pass")
+
+        buyer_client = APIClient()
+        buyer_client.force_authenticate(buyer_user)
+        buyer_client.post(reverse("accept-invitation", kwargs={"token": buyer_invite.token}))
+        transaction.refresh_from_db()
+        self.assertEqual(transaction.stage, TransactionStage.PENDING_INVITATIONS)
+
+        seller_client = APIClient()
+        seller_client.force_authenticate(seller_user)
+        seller_client.post(reverse("accept-invitation", kwargs={"token": seller_invite.token}))
+        transaction.refresh_from_db()
+        self.assertEqual(transaction.stage, TransactionStage.PENDING_USER_INFORMATION)
+        self.assertEqual(
+            transaction.events.filter(type=TransactionEventType.STAGE_CHANGED).count(),
+            1,
+        )
+
+    def test_double_broker_stage_progression_with_counterparty(self):
+        self.client.post(
+            reverse("transaction-list"),
+            {
+                **self._core_fields(),
+                "type": TransactionType.DOUBLE_BROKER_SPLIT,
+                "payload": {
+                    "known_party_role": ParticipantRole.BUYER,
+                    "known_party_email": "buyer@example.com",
+                    "secondary_broker_email": "second@example.com",
+                },
+            },
+            format="json",
+        )
+        transaction = Transaction.objects.get()
+        self.assertEqual(transaction.stage, TransactionStage.PENDING_INVITATIONS)
+
+        buyer_invite = TransactionInvitation.objects.get(participant__role=ParticipantRole.BUYER)
+        secondary_invite = TransactionInvitation.objects.get(participant__role=ParticipantRole.BROKER_SECONDARY)
+
+        buyer_user = User.objects.create_user(email="buyer@example.com", password="pass")
+        secondary_user = User.objects.create_user(email="second@example.com", password="pass", is_broker=True)
+
+        buyer_client = APIClient()
+        buyer_client.force_authenticate(buyer_user)
+        buyer_client.post(reverse("accept-invitation", kwargs={"token": buyer_invite.token}))
+        transaction.refresh_from_db()
+        self.assertEqual(transaction.stage, TransactionStage.PENDING_INVITATIONS)
+
+        secondary_client = APIClient()
+        secondary_client.force_authenticate(secondary_user)
+        secondary_client.post(reverse("accept-invitation", kwargs={"token": secondary_invite.token}))
+        transaction.refresh_from_db()
+        self.assertEqual(transaction.stage, TransactionStage.PENDING_INVITATIONS)
+
+        secondary_client.post(
+            reverse("transaction-invite-counterparty", kwargs={"id": transaction.id}),
+            {"counterparty_email": "seller@example.com"},
+            format="json",
+        )
+        counterparty_invite = TransactionInvitation.objects.get(participant__role=ParticipantRole.SELLER)
+        transaction.refresh_from_db()
+        self.assertEqual(transaction.stage, TransactionStage.PENDING_INVITATIONS)
+
+        seller_user = User.objects.create_user(email="seller@example.com", password="pass")
+        seller_client = APIClient()
+        seller_client.force_authenticate(seller_user)
+        seller_client.post(reverse("accept-invitation", kwargs={"token": counterparty_invite.token}))
+
+        transaction.refresh_from_db()
+        self.assertEqual(transaction.stage, TransactionStage.PENDING_USER_INFORMATION)
+        self.assertGreaterEqual(
+            transaction.events.filter(type=TransactionEventType.INVITATION_SENT).count(),
+            3,
+        )
+        self.assertGreaterEqual(
+            transaction.events.filter(type=TransactionEventType.INVITATION_ACCEPTED).count(),
+            3,
+        )
+        self.assertEqual(
+            transaction.events.filter(type=TransactionEventType.STAGE_CHANGED).count(),
+            1,
+        )
