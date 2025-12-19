@@ -31,7 +31,9 @@ class TransactionQuerysetMixin:
                 | Q(participants__invited_email=user.email)
                 | Q(created_by=user)
             )
-        ).distinct().prefetch_related("participants", "invitations", "details", "commission_split")
+        ).distinct().prefetch_related(
+            "participants", "invitations", "details", "commission_split", "events__actor"
+        )
 
 
 class TransactionListCreateView(TransactionQuerysetMixin, generics.ListCreateAPIView):

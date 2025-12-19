@@ -23,6 +23,11 @@ class TransactionStatus(models.TextChoices):
     CANCELLED = "cancelled", "Cancelled"
 
 
+class TransactionStage(models.TextChoices):
+    PENDING_INVITATIONS = "pending_invitations", "Pending Invitations"
+    PENDING_USER_INFORMATION = "pending_user_information", "Pending User Information"
+
+
 class ParticipantRole(models.TextChoices):
     BROKER_PRIMARY = "broker_primary", "Primary Broker"
     BROKER_SECONDARY = "broker_secondary", "Secondary Broker"
@@ -56,6 +61,12 @@ class Transaction(models.Model):
         help_text="Only required if depositor is not the purchaser",
     )
     property_address = models.CharField(max_length=255, blank=True)
+    stage = models.CharField(
+        max_length=64,
+        choices=TransactionStage.choices,
+        default=TransactionStage.PENDING_INVITATIONS,
+    )
+    stage_updated_at = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -98,6 +109,24 @@ class TransactionInvitation(models.Model):
 class TransactionDetails(models.Model):
     transaction = models.OneToOneField(Transaction, on_delete=models.CASCADE, related_name="details")
     data = models.JSONField(default=dict, blank=True)
+
+
+class TransactionEventType(models.TextChoices):
+    STAGE_CHANGED = "stage_changed", "Stage Changed"
+    INVITATION_SENT = "invitation_sent", "Invitation Sent"
+    INVITATION_ACCEPTED = "invitation_accepted", "Invitation Accepted"
+    COUNTERPARTY_INVITED = "counterparty_invited", "Counterparty Invited"
+
+
+class TransactionEvent(models.Model):
+    transaction = models.ForeignKey(Transaction, on_delete=models.CASCADE, related_name="events")
+    type = models.CharField(max_length=64, choices=TransactionEventType.choices)
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+    data = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
 
 
 class CommissionSplit(models.Model):
